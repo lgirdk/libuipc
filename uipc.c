@@ -28,7 +28,12 @@ void uipc_svr_release_resources(void)
 		close(gUipcServerInfo.sock);
 		gUipcServerInfo.sock = -1;
 	}
-	remove(gUipcServerInfo.servAddr.sun_path);
+
+    if (gUipcServerInfo.servAddr.sun_path[0] != '\0')
+    {
+    	remove(gUipcServerInfo.servAddr.sun_path);
+        gUipcServerInfo.servAddr.sun_path[0] = '\0';
+    }
 }
 
 int uipc_svr_send_data(struct sockaddr_un *pClientAddr,uIpcData_t *pData)
@@ -74,10 +79,27 @@ static void * uipc_svr_thread(void *arg)
 int uipc_svr_init(char *svrFileName,uIpcCmdHandler_t func)
 {
 	int sock;
+    
+    if (gUipcServerInfo.sock == -1)
+    {
+        gUipcServerInfo.servAddr.sun_path[0] = '\0';
+    }
+
 	if((svrFileName==NULL)||(func==NULL))
 		return(-1);
 	if(gUipcServerInfo.sock >= 0)
-		return(0);
+    {
+        if (gUipcServerInfo.servAddr.sun_path[0] == '\0')
+        {
+             close(gUipcServerInfo.sock);
+             gUipcServerInfo.sock = -1;          
+        }
+        else
+        {
+            return(0);
+        }
+    }
+
 	if((sock=socket(AF_UNIX, SOCK_DGRAM,0))<0){
 		printf("IPC:Failed to create ipc socket\n\r");
 		return(-1);
@@ -85,6 +107,12 @@ int uipc_svr_init(char *svrFileName,uIpcCmdHandler_t func)
 	memset(&gUipcServerInfo.servAddr,0,sizeof(gUipcServerInfo.servAddr));
 	gUipcServerInfo.servAddr.sun_family = AF_UNIX;
 	strcpy(gUipcServerInfo.servAddr.sun_path,svrFileName);
+
+    if ( access ( gUipcServerInfo.servAddr.sun_path ,  F_OK )  ==  0)
+    {
+        unlink ( gUipcServerInfo.servAddr.sun_path ) ;
+    }
+
 	if(bind(sock,(struct sockaddr *)&gUipcServerInfo.servAddr,sizeof(gUipcServerInfo.servAddr))<0){
 		close(sock);
 		printf("UIPC:Failed to bind unix socket\n\r");
